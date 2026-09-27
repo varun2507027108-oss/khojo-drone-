@@ -6,16 +6,24 @@ import cv2
 import numpy as np
 
 
+REQUIRED_MARKER_IDS = (80, 85, 90, 95)
+
+
 def detect_markers(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
-    parameters = cv2.aruco.DetectorParameters()
-    detector = cv2.aruco.ArucoDetector(dictionary, parameters)
-    corners, ids, _ = detector.detectMarkers(gray)
+
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        parameters = cv2.aruco.DetectorParameters()
+        detector = cv2.aruco.ArucoDetector(dictionary, parameters)
+        corners, ids, _ = detector.detectMarkers(gray)
+    else:
+        parameters = cv2.aruco.DetectorParameters_create()
+        corners, ids, _ = cv2.aruco.detectMarkers(
+            gray, dictionary, parameters=parameters
+        )
+
     return corners, ids
-
-
-REQUIRED_MARKER_IDS = (80, 85, 90, 95)
 
 
 def select_corner_markers(corners, ids, required_ids=None):
@@ -88,22 +96,24 @@ def perspective_transform(image, src_pts):
 def detect_survivors(warped):
     hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
 
-    lower_red1 = np.array([0, 120, 70])
+    lower_red1 = np.array([0, 100, 70])
     upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 120, 70])
+    lower_red2 = np.array([170, 100, 70])
     upper_red2 = np.array([180, 255, 255])
 
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     mask_red = cv2.bitwise_or(mask_red1, mask_red2)
 
-    lower_yellow = np.array([20, 100, 100])
+    lower_yellow = np.array([18, 90, 90])
     upper_yellow = np.array([35, 255, 255])
     mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
 
     kernel = np.ones((5, 5), np.uint8)
     mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_OPEN, kernel)
+    mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
     mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_OPEN, kernel)
+    mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_CLOSE, kernel)
 
     critical_centers = extract_centers(mask_red)
     stable_centers = extract_centers(mask_yellow)
