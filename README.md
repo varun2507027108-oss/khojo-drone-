@@ -74,17 +74,14 @@ drop any new picture into `images/` and its output appears beside it.
 
 ## Marker IDs
 
-The four arena corner markers must be **80, 85, 90 and 95** (`REQUIRED_MARKER_IDS`
-in the script). If any one of them is not detected the program says which ID is
-missing, reports `Error: Need all four required ArUco markers: 80, 85, 90, 95`
-and exits with status 1 — it never guesses an arena from the wrong markers.
-Any *other* markers in shot (including extra ones inside the arena) are ignored.
+The detector accepts **any four distinct IDs** from the configured ArUco
+dictionary. It does not require specific numeric IDs.
 
-If the competition ever changes the IDs, no code edit is needed:
+The input image must decode **exactly four markers**:
 
-```bash
-python3 pico_ws/src/swift_pico/scripts/KD_4373_task1a.py --image images/image_1.jpg --required-ids 80,85,90,95
-```
+* fewer than four -> aborts with a clear error,
+* more than four -> aborts with a clear error (extras are not ignored),
+* duplicate IDs among the four -> aborts with a clear error.
 
 ## 1. Setup (on the Pico / Ubuntu machine)
 
@@ -142,10 +139,10 @@ Compress-Archive -Path KD_4373_task1a.py -DestinationPath KD_4373.zip -Force
 ## 4. Local smoke test (no arena needed)
 
 `tools/make_test_image.py` renders a synthetic arena: a light-grey mat with a dark
-boundary line, four `DICT_4X4_250` markers (**80, 85, 90, 95**) touching the arena
-corners, plus a red (critical) and a yellow (stable) survivor blob at known grid
-cells. It prints the expected answer so the detector can be checked without the
-real course image.
+boundary line, four `DICT_4X4_250` markers (default **80, 85, 90, 95**; configurable
+with `--marker-ids`) touching the arena corners, plus a red (critical) and a yellow
+(stable) survivor blob at known grid cells. It prints the expected answer so the
+detector can be checked without the real course image.
 
 ```powershell
 cd 'C:\Users\varun\khojo drone'
@@ -156,7 +153,7 @@ python tools\make_test_image.py --out images\image_1.jpg
 # 2. run the detector on it (results land next to the image)
 python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\image_1.jpg
 
-# 3. run the built-in checks (flat / tilted / rotated / missing marker / extra markers)
+# 3. run the built-in checks (flat / tilted / rotated / arbitrary IDs / invalid marker counts)
 python tools\selftest.py
 ```
 
@@ -169,11 +166,12 @@ PASS  flat image stable cells: got ['G8'], expected ['G8']
 PASS  tilted image marker IDs: got [80, 85, 90, 95], expected [80, 85, 90, 95]
 PASS  tilted image critical cells: got ['C4'], expected ['C4']
 PASS  tilted image stable cells: got ['G8'], expected ['G8']
-PASS  non-required markers ignored: got [80, 85, 90, 95], expected [80, 85, 90, 95]
-PASS  6-marker image critical cells: got ['C4'], expected ['C4']
-PASS  6-marker image stable cells: got ['G8'], expected ['G8']
-PASS  missing ID 95 aborts: got (None, [], []), expected (None, [], [])
-PASS  abort names only the missing ID: got Error: Missing required marker IDs: [95], expected Error: Missing required marker IDs: [95]
+PASS  arbitrary 4-marker IDs: got [7, 42, 113, 199], expected [7, 42, 113, 199]
+PASS  arbitrary 4-marker critical cells: got ['C4'], expected ['C4']
+PASS  arbitrary 4-marker stable cells: got ['G8'], expected ['G8']
+PASS  6-marker image aborts: got (None, [], []), expected (None, [], [])
+PASS  3-marker image aborts: got (None, [], []), expected (None, [], [])
+PASS  fewer-than-4 marker error message: got Error: Exactly four ArUco markers are required, but detected 3, expected Error: Exactly four ArUco markers are required, but detected 3
 PASS  rotated image marker IDs: got [80, 85, 90, 95], expected [80, 85, 90, 95]
 PASS  rotated image critical cells: got ['I8'], expected ['I8']
 PASS  rotated image stable cells: got ['E4'], expected ['E4']
@@ -196,8 +194,8 @@ python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\missing_m
 Output (no results file is written and the exit status is 1):
 
 ```
-Error: Missing required marker IDs: [95]
-Error: Need all four required ArUco markers: 80, 85, 90, 95
+Error: Exactly four ArUco markers are required, but detected 3
+Error: Need exactly four distinct ArUco markers to define the arena corners
 exit_code=1
 ```
 
@@ -213,11 +211,12 @@ PASS  flat image stable cells: got ['G8'], expected ['G8']
 PASS  tilted image marker IDs: got [80, 85, 90, 95], expected [80, 85, 90, 95]
 PASS  tilted image critical cells: got ['C4'], expected ['C4']
 PASS  tilted image stable cells: got ['G8'], expected ['G8']
-PASS  non-required markers ignored: got [80, 85, 90, 95], expected [80, 85, 90, 95]
-PASS  6-marker image critical cells: got ['C4'], expected ['C4']
-PASS  6-marker image stable cells: got ['G8'], expected ['G8']
-PASS  missing ID 95 aborts: got (None, [], []), expected (None, [], [])
-PASS  abort names only the missing ID: got Error: Missing required marker IDs: [95], expected Error: Missing required marker IDs: [95]
+PASS  arbitrary 4-marker IDs: got [7, 42, 113, 199], expected [7, 42, 113, 199]
+PASS  arbitrary 4-marker critical cells: got ['C4'], expected ['C4']
+PASS  arbitrary 4-marker stable cells: got ['G8'], expected ['G8']
+PASS  6-marker image aborts: got (None, [], []), expected (None, [], [])
+PASS  3-marker image aborts: got (None, [], []), expected (None, [], [])
+PASS  fewer-than-4 marker error message: got Error: Exactly four ArUco markers are required, but detected 3, expected Error: Exactly four ArUco markers are required, but detected 3
 PASS  rotated image marker IDs: got [80, 85, 90, 95], expected [80, 85, 90, 95]
 PASS  rotated image critical cells: got ['I8'], expected ['I8']
 PASS  rotated image stable cells: got ['E4'], expected ['E4']
@@ -227,8 +226,9 @@ ALL CHECKS PASSED
 
 ## 5. Running the pipeline on an arena picture of your own
 
-`tools/add_markers_to_image.py` puts the four corner markers (**80, 85, 90, 95**)
-onto a picture that has none, so `KD_4373_task1a.py` can be run on it:
+`tools/add_markers_to_image.py` puts four corner markers (default **80, 85, 90, 95**;
+configurable with `--marker-ids`) onto a picture that has none, so
+`KD_4373_task1a.py` can be run on it:
 
 * markers are pasted *outside* the arena on a dark plate inside an added canvas
   margin -- markers flush with the picture border are dropped by ArUco's
@@ -313,10 +313,9 @@ Three things to know when the picture is not a real arena:
 
 * `detect_markers` uses the modern `cv2.aruco.ArucoDetector` API (OpenCV >= 4.7;
   verified locally on OpenCV 5.0.0).
-* `select_corner_markers` only accepts the required IDs (`REQUIRED_MARKER_IDS`,
-  default 80/85/90/95, overridable with `--required-ids`). If any required ID is
-  missing it prints which ones and returns `None`, so `main` exits with status 1
-  instead of warping a wrong arena. Extra markers in the frame are ignored.
+* `select_corner_markers` enforces exactly four detected markers, all with distinct
+  IDs. If the count is not four (or IDs are duplicated) it prints a clear error and
+  returns `None`, so `main` exits with status 1 instead of warping a wrong arena.
 * `get_arena_corners` uses, for each corner marker, the corner point closest to
   the centroid of all marker centres — the marker corner that touches the arena
   — and sorts them with `order_corner_points` into TL, TR, BR, BL. Because the

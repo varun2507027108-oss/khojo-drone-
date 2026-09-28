@@ -73,6 +73,15 @@ def erase_marker(image, index, pad=8):
     return gen.erase_marker(image, index, pad)
 
 
+def build_image_with_markers(marker_ids):
+    old_ids = gen.MARKER_IDS
+    gen.MARKER_IDS = tuple(marker_ids)
+    try:
+        return gen.build_image()
+    finally:
+        gen.MARKER_IDS = old_ids
+
+
 def main():
     module = load_detector()
     required = sorted(gen.MARKER_IDS)
@@ -90,21 +99,49 @@ def main():
     results.append(check('tilted image critical cells', critical, ['C4']))
     results.append(check('tilted image stable cells', stable, ['G8']))
 
+    arbitrary_marker_ids = (7, 42, 113, 199)
+    arbitrary = build_image_with_markers(arbitrary_marker_ids)
+    ids, critical, stable = run_pipeline(module, arbitrary)
+    results.append(check('arbitrary 4-marker IDs', sorted(ids or []), sorted(arbitrary_marker_ids)))
+    results.append(check('arbitrary 4-marker critical cells', critical, ['C4']))
+    results.append(check('arbitrary 4-marker stable cells', stable, ['G8']))
+
     crowded = add_inner_markers(gen.build_image())
     ids, critical, stable = run_pipeline(module, crowded)
-    results.append(check('non-required markers ignored', sorted(ids or []), required))
-    results.append(check('6-marker image critical cells', critical, ['C4']))
-    results.append(check('6-marker image stable cells', stable, ['G8']))
+    results.append(check('6-marker image aborts',
+                         (ids, critical, stable), (None, [], [])))
 
     broken = erase_marker(gen.build_image(), index=3)          # remove ID 95
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         ids, critical, stable = run_pipeline(module, broken)
-    results.append(check(f'missing ID {gen.MARKER_IDS[3]} aborts',
+    results.append(check('3-marker image aborts',
                          (ids, critical, stable), (None, [], [])))
-    results.append(check('abort names only the missing ID',
+    results.append(check('fewer-than-4 marker error message',
                          buffer.getvalue().strip(),
-                         f"Error: Missing required marker IDs: [{gen.MARKER_IDS[3]}]"))
+                         "Error: Exactly four ArUco markers are required, but detected 3"))
+
+    duplicate_ids = np.array([[7], [7], [42], [113]], dtype=np.int32)
+    duplicate_corners = [np.zeros((1, 4, 2), dtype=np.float32) for _ in range(4)]
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        selected_corners, selected_ids = module.select_corner_markers(duplicate_corners, duplicate_ids)
+    results.append(check('duplicate marker IDs abort',
+                         (selected_corners, selected_ids), (None, None)))
+    results.append(check('duplicate marker error message',
+                         buffer.getvalue().strip(),
+                         "Error: Four distinct ArUco marker IDs are required, got [7, 7, 42, 113]"))
+
+    invalid_ids = np.array([[7], [42], [113], [199]], dtype=np.int32)
+    invalid_corners = [np.zeros((1, 4, 2), dtype=np.float32) for _ in range(3)]
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        selected_corners, selected_ids = module.select_corner_markers(invalid_corners, invalid_ids)
+    results.append(check('invalid detection data abort',
+                         (selected_corners, selected_ids), (None, None)))
+    results.append(check('invalid detection data message',
+                         buffer.getvalue().strip(),
+                         "Error: Invalid marker detection data (corner count mismatch)"))
 
     swapped = flat.copy()
     swapped = cv2.rotate(swapped, cv2.ROTATE_180)              # camera rotated 180 degrees

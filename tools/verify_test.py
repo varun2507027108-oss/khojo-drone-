@@ -20,50 +20,54 @@ SCRIPTS_DIR = os.path.join(ROOT, 'pico_ws', 'src', 'swift_pico', 'scripts')
 IMAGE_DIR = os.path.join(ROOT, 'images', 'test_images')
 GENERATOR = os.path.join(TOOLS_DIR, 'generate_test_image.py')
 
-MARKERS = [80, 85, 90, 95]
-
 TEST_CASES = [
     {
         'name': 'Flat basic',
         'args': ['--critical', 'C4,F2', '--stable', 'G8,D6', '--no-perspective'],
-        'expected': {'markers': MARKERS, 'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
+        'expected': {'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
     },
     {
         'name': 'Perspective basic',
         'args': ['--critical', 'C4,F2', '--stable', 'G8,D6'],
-        'expected': {'markers': MARKERS, 'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
+        'expected': {'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
     },
     {
         'name': 'Flat edges',
         'args': ['--critical', 'A1,K11', '--stable', 'F6,B3', '--no-perspective'],
-        'expected': {'markers': MARKERS, 'critical': ['A1', 'K11'], 'stable': ['B3', 'F6']},
+        'expected': {'critical': ['A1', 'K11'], 'stable': ['B3', 'F6']},
     },
     {
         'name': 'Perspective edges',
         'args': ['--critical', 'A1,K11', '--stable', 'F6,B3'],
-        'expected': {'markers': MARKERS, 'critical': ['A1', 'K11'], 'stable': ['B3', 'F6']},
+        'expected': {'critical': ['A1', 'K11'], 'stable': ['B3', 'F6']},
     },
     {
         'name': 'Many survivors flat',
         'args': ['--critical', 'C4,G8,K11,A1', '--stable', 'F6,B3,D6,H2', '--no-perspective'],
-        'expected': {'markers': MARKERS, 'critical': ['A1', 'C4', 'G8', 'K11'],
+        'expected': {'critical': ['A1', 'C4', 'G8', 'K11'],
                      'stable': ['B3', 'D6', 'F6', 'H2']},
     },
     {
         'name': 'Many survivors perspective',
         'args': ['--critical', 'C4,G8,K11,A1', '--stable', 'F6,B3,D6,H2'],
-        'expected': {'markers': MARKERS, 'critical': ['A1', 'C4', 'G8', 'K11'],
+        'expected': {'critical': ['A1', 'C4', 'G8', 'K11'],
                      'stable': ['B3', 'D6', 'F6', 'H2']},
     },
     {
         'name': 'Seed 7 obstacles',
         'args': ['--critical', 'C4,F2', '--stable', 'G8,D6', '--seed', '7'],
-        'expected': {'markers': MARKERS, 'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
+        'expected': {'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
     },
     {
         'name': 'Single survivor per class',
         'args': ['--critical', 'K1', '--stable', 'A11'],
-        'expected': {'markers': MARKERS, 'critical': ['K1'], 'stable': ['A11']},
+        'expected': {'critical': ['K1'], 'stable': ['A11']},
+    },
+    {
+        'name': 'Arbitrary marker IDs',
+        'args': ['--critical', 'C4,F2', '--stable', 'G8,D6', '--no-perspective',
+                 '--marker-ids', '7,42,113,199'],
+        'expected': {'critical': ['C4', 'F2'], 'stable': ['D6', 'G8']},
     },
 ]
 
@@ -95,6 +99,18 @@ def parse_results(text):
     return parsed
 
 
+def expected_markers(case):
+    marker_arg = None
+    args = case['args']
+    for index, value in enumerate(args):
+        if value == '--marker-ids' and index + 1 < len(args):
+            marker_arg = args[index + 1]
+            break
+    if marker_arg is None:
+        return [80, 85, 90, 95]
+    return sorted(int(part.strip()) for part in marker_arg.split(',') if part.strip())
+
+
 def run_case(case, script):
     slug = case['name'].lower().replace(' ', '_')
     image_path = os.path.join(IMAGE_DIR, f'test_{slug}.jpg')
@@ -120,9 +136,11 @@ def run_case(case, script):
 
     actual = parse_results(text)
     problems = []
+    expected = dict(case['expected'])
+    expected['markers'] = expected_markers(case)
     for key in ('markers', 'critical', 'stable'):
-        if actual[key] != case['expected'][key]:
-            problems.append(f"{key}: got {actual[key]}, expected {case['expected'][key]}")
+        if actual[key] != expected[key]:
+            problems.append(f"{key}: got {actual[key]}, expected {expected[key]}")
 
     if problems:
         return False, '\n'.join(problems) + f'\nresults file was:\n{text.strip()}', image_path

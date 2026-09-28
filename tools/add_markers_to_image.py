@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add the four Task 1A arena markers (80/85/90/95) to a picture that has none.
+"""Add four Task 1A arena markers to a picture that has none.
 
 Markers go outside the arena on a dark plate inside an added canvas margin, each
 marker image corner landing exactly on an arena corner (never flush to the canvas
@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 # Marker geometry, same recipe as tools/generate_test_image.py.
-MARKER_IDS = (80, 85, 90, 95)      # TL, TR, BR, BL
+MARKER_IDS = (80, 85, 90, 95)      # default TL, TR, BR, BL
 MARKER_SIZE = 120                  # divisible by 6 so the marker modules stay pixel-exact
 PLATE_PAD = 20                     # dark plate around each marker
 BORDER_GAP = 12                    # backdrop kept between plate and canvas border
@@ -167,25 +167,29 @@ def paste(canvas, patch, box):
     return canvas
 
 
-def paste_markers(canvas, arena, dictionary, marker_size):
-    """Paste 80/85/90/95 outside the arena so they define the arena corners."""
+def paste_markers(canvas, arena, dictionary, marker_ids, marker_size):
+    """Paste four markers outside the arena so they define the arena corners."""
     x1, y1, x2, y2 = (int(round(value)) for value in arena)
     size = marker_size        # the marker image is its black square
-    tops = {80: (x1 - size, y1 - size), 85: (x2, y1 - size),
-            90: (x2, y2), 95: (x1 - size, y2)}
+    tops = {
+        marker_ids[0]: (x1 - size, y1 - size),
+        marker_ids[1]: (x2, y1 - size),
+        marker_ids[2]: (x2, y2),
+        marker_ids[3]: (x1 - size, y2),
+    }
     plates = {
-        80: (x1 - size - PLATE_PAD, y1 - size - PLATE_PAD, x1, y1),
-        85: (x2, y1 - size - PLATE_PAD, x2 + size + PLATE_PAD, y1),
-        90: (x2, y2, x2 + size + PLATE_PAD, y2 + size + PLATE_PAD),
-        95: (x1 - size - PLATE_PAD, y2, x1, y2 + size + PLATE_PAD),
+        marker_ids[0]: (x1 - size - PLATE_PAD, y1 - size - PLATE_PAD, x1, y1),
+        marker_ids[1]: (x2, y1 - size - PLATE_PAD, x2 + size + PLATE_PAD, y1),
+        marker_ids[2]: (x2, y2, x2 + size + PLATE_PAD, y2 + size + PLATE_PAD),
+        marker_ids[3]: (x1 - size - PLATE_PAD, y2, x1, y2 + size + PLATE_PAD),
     }
 
-    for marker_id in MARKER_IDS:
+    for marker_id in marker_ids:
         px1, py1, px2, py2 = plates[marker_id]
         paste(canvas, np.full((py2 - py1, px2 - px1, 3), BACKDROP, dtype=np.uint8),
               plates[marker_id])
 
-    for marker_id in MARKER_IDS:
+    for marker_id in marker_ids:
         marker = cv2.aruco.generateImageMarker(dictionary, marker_id, marker_size)
         if marker.ndim == 2:
             marker = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
@@ -203,22 +207,27 @@ def detect_markers(image):
     return corners, ids
 
 
-def marker_targets(arena):
+def marker_targets(arena, marker_ids):
     """Arena corner each marker's black square must touch (TL, TR, BR, BL)."""
     x1, y1, x2, y2 = arena
-    return {80: (x1, y1), 85: (x2, y1), 90: (x2, y2), 95: (x1, y2)}
+    return {
+        marker_ids[0]: (x1, y1),
+        marker_ids[1]: (x2, y1),
+        marker_ids[2]: (x2, y2),
+        marker_ids[3]: (x1, y2),
+    }
 
 
-def verify_markers(canvas, arena, tolerance=4.0):
+def verify_markers(canvas, arena, marker_ids, tolerance=4.0):
     """Decode the pasted markers and check the arena rectangle they define."""
     corners, ids = detect_markers(canvas)
     found = [] if ids is None else sorted(int(i) for i in np.asarray(ids).flatten())
     print(f"  decoded marker IDs: {found}")
-    if found != sorted(MARKER_IDS):
-        print(f"  FAIL  expected exactly {sorted(MARKER_IDS)}")
+    if found != sorted(marker_ids):
+        print(f"  FAIL  expected exactly {sorted(marker_ids)}")
         return False
 
-    targets = marker_targets(arena)
+    targets = marker_targets(arena, marker_ids)
     ok = True
     for marker_corners, marker_id in zip(corners, np.asarray(ids).flatten()):
         target = np.array(targets[int(marker_id)], dtype=np.float32)
@@ -242,7 +251,7 @@ def write_image(image, path):
     return path
 
 
-def write_preview(canvas, arena, arena_shifted, survivors, shift, path):
+def write_preview(canvas, arena, arena_shifted, survivors, shift, path, marker_ids):
     """Draw the arena, the survivor blobs and the labels they are expected to get."""
     preview = canvas.copy()
     x1, y1, x2, y2 = arena_shifted
@@ -257,7 +266,7 @@ def write_preview(canvas, arena, arena_shifted, survivors, shift, path):
             cv2.putText(preview, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 0), 5)
             cv2.putText(preview, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 1.1, colour, 2)
 
-    for marker_id, (tx, ty) in marker_targets(arena_shifted).items():
+    for marker_id, (tx, ty) in marker_targets(arena_shifted, marker_ids).items():
         cv2.circle(preview, (int(tx), int(ty)), 12, (255, 255, 255), 2)
 
     return write_image(preview, path)
@@ -273,6 +282,19 @@ def parse_arena(text):
     return values
 
 
+def parse_marker_ids(text):
+    parts = [part.strip() for part in text.split(',') if part.strip()]
+    try:
+        marker_ids = tuple(int(part) for part in parts)
+    except ValueError as error:
+        raise ValueError(f"bad marker ID list {text!r}: {error}")
+    if len(marker_ids) != 4:
+        raise ValueError(f"need exactly four marker IDs, got {list(marker_ids)}")
+    if len(set(marker_ids)) != 4:
+        raise ValueError(f"marker IDs must be distinct, got {list(marker_ids)}")
+    return marker_ids
+
+
 def default_output_path(image_path):
     stem, extension = os.path.splitext(image_path)
     return f"{stem}_with_markers{extension or '.png'}"
@@ -280,7 +302,7 @@ def default_output_path(image_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Add the Task 1A corner markers (80/85/90/95) to an existing picture')
+        description='Add four Task 1A corner markers to an existing picture')
     parser.add_argument('--image', required=True,
                         help='Input picture (top-down arena photo with a visible grid)')
     parser.add_argument('--out', default=None,
@@ -293,10 +315,18 @@ def main():
                              f'(default: {MARKER_SIZE})')
     parser.add_argument('--preview', action='store_true',
                         help='Also write <out stem>_preview with the arena and expected labels')
+    parser.add_argument('--marker-ids',
+                        default=','.join(str(marker_id) for marker_id in MARKER_IDS),
+                        help='Exactly four comma-separated ArUco marker IDs in TL,TR,BR,BL order')
     args = parser.parse_args()
 
     if args.marker_size <= 0 or args.marker_size % MODULES_PER_SIDE:
         print(f"Error: --marker-size must be a positive multiple of {MODULES_PER_SIDE}")
+        sys.exit(1)
+    try:
+        marker_ids = parse_marker_ids(args.marker_ids)
+    except ValueError as error:
+        print(f"Error: --marker-ids {error}")
         sys.exit(1)
 
     image = cv2.imread(args.image)
@@ -343,14 +373,14 @@ def main():
 
     arena_shifted = (x1 + margin, y1 + margin, x2 + margin, y2 + margin)
     dictionary = cv2.aruco.getPredefinedDictionary(DICTIONARY_ID)
-    paste_markers(canvas, arena_shifted, dictionary, args.marker_size)
+    paste_markers(canvas, arena_shifted, dictionary, marker_ids, args.marker_size)
 
     out_path = write_image(canvas, args.out or default_output_path(args.image))
     print(f"Wrote {out_path} ({canvas.shape[1]}x{canvas.shape[0]}, "
           f"{margin} px margin per side)")
 
     print("Marker check (same detector settings as the pipeline):")
-    verified = verify_markers(canvas, arena_shifted)
+    verified = verify_markers(canvas, arena_shifted, marker_ids)
 
     labels = {'critical': [], 'stable': []}
     print("Survivor labels the pipeline should report:")
@@ -363,14 +393,15 @@ def main():
                   f"{distance:.2f} cells from the nearest labelled intersection{warning}")
 
     print("Expected results file:")
-    print(f"  Detected marker IDs: {sorted(MARKER_IDS)}")
+    print(f"  Detected marker IDs: {sorted(marker_ids)}")
     print(f"  Critical Survivors: {', '.join(labels['critical'])}")
     print(f"  Stable Survivors: {', '.join(labels['stable'])}")
 
     if args.preview:
         stem, extension = os.path.splitext(out_path)
         preview_path = write_preview(canvas, arena, arena_shifted, survivors,
-                                     (margin, margin), f"{stem}_preview{extension}")
+                                     (margin, margin), f"{stem}_preview{extension}",
+                                     marker_ids)
         print(f"Wrote {preview_path} (arena, blobs, expected labels)")
 
     if not verified:
