@@ -2,8 +2,8 @@
 """Rename the Task 1A script to the real team ID and rebuild the submission zip.
 
 Usage:
-    python tools/rename_team.py --team 1234             # rename + rebuild zip
-    python tools/rename_team.py --team 1234 --dry-run   # only report what it would do
+    python tools/rename_team.py --team 4373             # rename + rebuild zip
+    python tools/rename_team.py --team 4373 --dry-run   # only report what it would do
 
 Renames KD_<old>_task1a.py, points the team ID references in README.md at the new
 ID, deletes the stale zip and writes KD_<team>.zip holding only the script.
@@ -70,7 +70,7 @@ def build_zip(script_path, team_id, dry_run):
 
 def main():
     parser = argparse.ArgumentParser(description='Rename Task 1A files to the real team ID')
-    parser.add_argument('--team', required=True, help='Your team ID, e.g. 1234')
+    parser.add_argument('--team', required=True, help='Your team ID, e.g. 4373')
     parser.add_argument('--dry-run', action='store_true', help='Report actions without changing files')
     args = parser.parse_args()
 

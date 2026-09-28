@@ -1,6 +1,6 @@
 # Khojo Drone — Task 1A (survivor detection in arena image)
 
-Team ID placeholder: `1234` — replace it with your **actual team ID** using:
+Team ID: `4373`
 
 ```powershell
 python tools/rename_team.py --team <YOUR_TEAM_ID>            # add --dry-run to preview
@@ -47,7 +47,7 @@ khojo drone/
 │   ├── my_arena.png                         # the picture you supplied (no markers)
 │   ├── my_arena_with_markers.png            # same picture with 80/85/90/95 added
 │   ├── my_arena_with_markers_preview.png    # arena box + expected labels drawn on it
-│   ├── my_arena_with_markers_results.txt    # what KD_1234_task1a.py reported for it
+│   ├── my_arena_with_markers_results.txt    # what KD_4373_task1a.py reported for it
 │   ├── image_1.jpg / image_1_results.txt    # smoke-test input + its output
 │   ├── test_flat.jpg / test_tilted.jpg / test_varied.jpg   (+ *_results.txt each)
 │   ├── missing_marker.jpg                   # sample with marker 95 erased (abort-path test)
@@ -60,12 +60,12 @@ khojo drone/
 │   ├── add_markers_to_image.py             # adds the 4 corner markers to any arena picture
 │   └── rename_team.py                      # renames script/README/zip to the real team ID
 └── pico_ws/src/swift_pico/scripts/
-    ├── KD_1234_task1a.py                   # <-- the submission file
-    └── KD_1234.zip                         # <-- the submission archive (script only)
+    ├── KD_4373_task1a.py                   # <-- the submission file
+    └── KD_4373.zip                         # <-- the submission archive (script only)
 
 Target layout on the robot (this tree mirrors it):
 
-~/pico_ws/src/swift_pico/scripts/KD_1234_task1a.py
+~/pico_ws/src/swift_pico/scripts/KD_4373_task1a.py
 ```
 
 **Where things go:** every run writes `<image stem>_results.txt` *next to the image it
@@ -83,7 +83,7 @@ Any *other* markers in shot (including extra ones inside the arena) are ignored.
 If the competition ever changes the IDs, no code edit is needed:
 
 ```bash
-python3 pico_ws/src/swift_pico/scripts/KD_1234_task1a.py --image images/image_1.jpg --required-ids 80,85,90,95
+python3 pico_ws/src/swift_pico/scripts/KD_4373_task1a.py --image images/image_1.jpg --required-ids 80,85,90,95
 ```
 
 ## 1. Setup (on the Pico / Ubuntu machine)
@@ -105,7 +105,7 @@ cd "$HOME/khojo drone"                        # project root, the folder that ho
 ```
 
 ```bash
-python3 pico_ws/src/swift_pico/scripts/KD_1234_task1a.py --image images/image_1.jpg
+python3 pico_ws/src/swift_pico/scripts/KD_4373_task1a.py --image images/image_1.jpg
 ```
 
 Output is written next to the input image as `images/image_1_results.txt`:
@@ -121,10 +121,10 @@ Stable Survivors: G8
 
 ```bash
 cd ~/pico_ws/src/swift_pico/scripts/
-zip KD_1234.zip KD_1234_task1a.py
+zip KD_4373.zip KD_4373_task1a.py
 ```
 
-Upload `KD_1234.zip` to the Student portal in the Task 1A slot.
+Upload `KD_4373.zip` to the Student portal in the Task 1A slot.
 
 ## Windows equivalents (for local testing on this PC)
 
@@ -132,11 +132,11 @@ Upload `KD_1234.zip` to the Student portal in the Task 1A slot.
 cd 'C:\Users\varun\khojo drone'
 
 # run the detector (the results file lands next to the image)
-python pico_ws\src\swift_pico\scripts\KD_1234_task1a.py --image images\image_1.jpg
+python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\image_1.jpg
 
 # rebuild the submission zip
 cd pico_ws\src\swift_pico\scripts
-Compress-Archive -Path KD_1234_task1a.py -DestinationPath KD_1234.zip -Force
+Compress-Archive -Path KD_4373_task1a.py -DestinationPath KD_4373.zip -Force
 ```
 
 ## 4. Local smoke test (no arena needed)
@@ -154,7 +154,7 @@ cd 'C:\Users\varun\khojo drone'
 python tools\make_test_image.py --out images\image_1.jpg
 
 # 2. run the detector on it (results land next to the image)
-python pico_ws\src\swift_pico\scripts\KD_1234_task1a.py --image images\image_1.jpg
+python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\image_1.jpg
 
 # 3. run the built-in checks (flat / tilted / rotated / missing marker / extra markers)
 python tools\selftest.py
@@ -190,7 +190,7 @@ cd 'C:\Users\varun\khojo drone'
 python tools\make_test_image.py --out images\missing_marker.jpg --erase-id 95
 
 # it is already in the repo; run the detector on it
-python pico_ws\src\swift_pico\scripts\KD_1234_task1a.py --image images\missing_marker.jpg
+python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\missing_marker.jpg
 ```
 
 Output (no results file is written and the exit status is 1):
@@ -201,7 +201,7 @@ Error: Need all four required ArUco markers: 80, 85, 90, 95
 exit_code=1
 ```
 
-`KD_1234_task1a.py` is stored with LF line endings (`\n`) so the file behaves
+`KD_4373_task1a.py` is stored with LF line endings (`\n`) so the file behaves
 cleanly on Linux, and the zip contains only that one file.
 
 Last verification run of `tools/selftest.py` on this machine (OpenCV 5.0.0, Python 3.13.5):
@@ -228,7 +228,7 @@ ALL CHECKS PASSED
 ## 5. Running the pipeline on an arena picture of your own
 
 `tools/add_markers_to_image.py` puts the four corner markers (**80, 85, 90, 95**)
-onto a picture that has none, so `KD_1234_task1a.py` can be run on it:
+onto a picture that has none, so `KD_4373_task1a.py` can be run on it:
 
 * markers are pasted *outside* the arena on a dark plate inside an added canvas
   margin -- markers flush with the picture border are dropped by ArUco's
@@ -252,7 +252,7 @@ python tools\add_markers_to_image.py --image images\my_arena.png --preview
 python tools\add_markers_to_image.py --image images\my_arena.png --arena 160,156,1176,1117
 
 # run the submission script on the result
-python pico_ws\src\swift_pico\scripts\KD_1234_task1a.py --image images\my_arena_with_markers.png
+python pico_ws\src\swift_pico\scripts\KD_4373_task1a.py --image images\my_arena_with_markers.png
 ```
 
 Run on `images/my_arena.png` (1254 x 1254 picture with its own 13 x 14 cell grid:
@@ -284,7 +284,7 @@ Expected results file:
 Wrote images\my_arena_with_markers_preview.png (arena, blobs, expected labels)
 ```
 
-`KD_1234_task1a.py` produced exactly that predicted answer:
+`KD_4373_task1a.py` produced exactly that predicted answer:
 
 ```
 Detected marker IDs: [80, 85, 90, 95]

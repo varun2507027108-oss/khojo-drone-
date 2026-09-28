@@ -3,7 +3,7 @@
 
 Usage:
     python tools/verify_test.py                 # uses pico_ws/.../scripts/KD_*_task1a.py
-    python tools/verify_test.py path/to/KD_1234_task1a.py
+    python tools/verify_test.py path/to/KD_4373_task1a.py
 
 Images land in images/test_images/ with their <image>_results.txt.  Label order
 follows contour order, so labels are compared as sorted sets.
