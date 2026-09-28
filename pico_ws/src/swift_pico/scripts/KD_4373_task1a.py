@@ -5,8 +5,11 @@ import sys
 import cv2
 import numpy as np
 
-
 REQUIRED_MARKER_IDS = (80, 85, 90, 95)
+CANVAS = 900
+CELL = 75
+MIN_AREA = 400
+MAX_AREA = 8000
 
 
 def detect_markers(image):
@@ -26,29 +29,27 @@ def detect_markers(image):
     return corners, ids
 
 
-def select_corner_markers(corners, ids, required_ids=None):
-    required = set(REQUIRED_MARKER_IDS if required_ids is None else required_ids)
+def select_corner_markers(corners, ids):
+    required = set(REQUIRED_MARKER_IDS)
 
-    if ids is None:
-        print(f"Error: No ArUco markers detected (required: {sorted(required)})")
+    if ids is None or len(ids) == 0:
+        print(f"Error: No ArUco markers detected (required: {sorted(required)})",
+              file=sys.stderr)
         return None, None
 
-    ids_flat = [int(marker_id) for marker_id in np.asarray(ids).flatten()]
-    detected_set = set(ids_flat)
+    ids_flat = [int(m) for m in np.asarray(ids).flatten()]
 
-    missing = required - detected_set
-    if missing:
-        print(f"Error: Missing required marker IDs: {sorted(missing)}")
+    if len(ids_flat) != len(required):
+        print(f"Error: Detected {len(ids_flat)} markers {sorted(ids_flat)}; "
+              f"need exactly {len(required)} ({sorted(required)})", file=sys.stderr)
         return None, None
 
-    selected_corners = []
-    selected_ids = []
-    for marker_corners, marker_id in zip(corners, ids_flat):
-        if marker_id in required:
-            selected_corners.append(marker_corners)
-            selected_ids.append(marker_id)
+    if set(ids_flat) != required:
+        print(f"Error: Detected IDs {sorted(ids_flat)}; required {sorted(required)}",
+              file=sys.stderr)
+        return None, None
 
-    return selected_corners, np.array(selected_ids)
+    return list(corners), np.array(ids_flat)
 
 
 def order_corner_points(pts):
@@ -63,18 +64,14 @@ def order_corner_points(pts):
 
 
 def get_arena_corners(marker_corners):
-    centers = []
-    for corners in marker_corners:
-        center = np.mean(corners[0], axis=0)
-        centers.append(center)
+    centers = [np.mean(c[0], axis=0) for c in marker_corners]
     centroid = np.mean(centers, axis=0)
 
     inner_corners = []
     for corners in marker_corners:
         pts = corners[0]
         distances = [np.linalg.norm(pt - centroid) for pt in pts]
-        inner_idx = np.argmin(distances)
-        inner_corners.append(pts[inner_idx])
+        inner_corners.append(pts[int(np.argmin(distances))])
 
     inner_corners = np.array(inner_corners, dtype=np.float32)
     return order_corner_points(inner_corners)
@@ -83,40 +80,34 @@ def get_arena_corners(marker_corners):
 def perspective_transform(image, src_pts):
     dst_pts = np.array([
         [0, 0],
-        [900, 0],
-        [900, 900],
-        [0, 900]
+        [CANVAS, 0],
+        [CANVAS, CANVAS],
+        [0, CANVAS]
     ], dtype=np.float32)
 
     matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-    warped = cv2.warpPerspective(image, matrix, (900, 900))
-    return warped
+    return cv2.warpPerspective(image, matrix, (CANVAS, CANVAS))
+
+
+def clean_mask(mask):
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    return mask
 
 
 def detect_survivors(warped):
     hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
 
-    lower_red1 = np.array([0, 100, 70])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 100, 70])
-    upper_red2 = np.array([180, 255, 255])
+    mask_red = cv2.bitwise_or(
+        cv2.inRange(hsv, np.array([0, 120, 100]), np.array([10, 255, 255])),
+        cv2.inRange(hsv, np.array([170, 120, 100]), np.array([180, 255, 255])),
+    )
 
-    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    mask_red = cv2.bitwise_or(mask_red1, mask_red2)
+    mask_yellow = cv2.inRange(hsv, np.array([22, 150, 150]), np.array([35, 255, 255]))
 
-    lower_yellow = np.array([18, 90, 90])
-    upper_yellow = np.array([35, 255, 255])
-    mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-    kernel = np.ones((5, 5), np.uint8)
-    mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_OPEN, kernel)
-    mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
-    mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_OPEN, kernel)
-    mask_yellow = cv2.morphologyEx(mask_yellow, cv2.MORPH_CLOSE, kernel)
-
-    critical_centers = extract_centers(mask_red)
-    stable_centers = extract_centers(mask_yellow)
+    critical_centers = extract_centers(clean_mask(mask_red))
+    stable_centers = extract_centers(clean_mask(mask_yellow))
 
     return critical_centers, stable_centers
 
@@ -126,70 +117,57 @@ def extract_centers(mask):
     centers = []
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area < 100:
+        if area < MIN_AREA or area > MAX_AREA:
             continue
         M = cv2.moments(contour)
         if M["m00"] != 0:
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-            centers.append((cx, cy))
+            centers.append((int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])))
     return centers
 
 
 def map_to_grid(centers):
     labels = []
-    cell_size = 75
     for cx, cy in centers:
-        col = int(round((cx - 75) / cell_size))
-        row = int(round((cy - 75) / cell_size))
+        col = int(round((cx - CELL) / CELL))
+        row = int(round((cy - CELL) / CELL))
         col = max(0, min(10, col))
         row = max(0, min(10, row))
-        label = chr(65 + col) + str(row + 1)
-        labels.append(label)
-    return labels
+        labels.append(chr(65 + col) + str(row + 1))
+    return sorted(set(labels))
+
+
+def results_path(image_path):
+    stem = os.path.splitext(os.path.basename(image_path))[0]
+    return os.path.join(os.path.dirname(image_path) or '.', f"{stem}_results.txt")
 
 
 def write_results(image_path, detected_ids, critical_labels, stable_labels):
-    image_stem = os.path.splitext(os.path.basename(image_path))[0]
-    output_dir = os.path.dirname(image_path) or '.'
-    output_path = os.path.join(output_dir, f"{image_stem}_results.txt")
-
+    output_path = results_path(image_path)
     with open(output_path, 'w') as f:
         f.write(f"Detected marker IDs: {detected_ids}\n\n")
         f.write(f"Critical Survivors: {', '.join(critical_labels)}\n")
         f.write(f"Stable Survivors: {', '.join(stable_labels)}\n")
-
     return output_path
 
 
 def main():
     parser = argparse.ArgumentParser(description='Detect survivors in arena image')
     parser.add_argument('--image', required=True, help='Path to input image')
-    parser.add_argument('--required-ids',
-                        default=','.join(str(marker_id) for marker_id in REQUIRED_MARKER_IDS),
-                        help='Comma-separated marker IDs marking the four arena corners')
     args = parser.parse_args()
 
-    try:
-        required_ids = {int(part) for part in args.required_ids.split(',') if part.strip()}
-    except ValueError:
-        print(f"Error: --required-ids must be comma-separated integers: {args.required_ids}")
-        sys.exit(1)
-    if not required_ids:
-        print("Error: --required-ids must contain at least one marker ID")
-        sys.exit(1)
+    out = results_path(args.image)
+    if os.path.exists(out):
+        os.remove(out)
 
     image = cv2.imread(args.image)
     if image is None:
-        print(f"Error: Cannot load image: {args.image}")
+        print(f"Error: Cannot load image: {args.image}", file=sys.stderr)
         sys.exit(1)
 
     corners, ids = detect_markers(image)
-    selected_corners, selected_ids = select_corner_markers(corners, ids, required_ids)
+    selected_corners, selected_ids = select_corner_markers(corners, ids)
 
     if selected_corners is None:
-        print("Error: Need all four required ArUco markers: "
-              + ', '.join(str(marker_id) for marker_id in sorted(required_ids)))
         sys.exit(1)
 
     detected_ids = sorted(int(mid) for mid in selected_ids)
