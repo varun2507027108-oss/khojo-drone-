@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extra checks for KD_1234_task1a.py: tilted, rotated, crowded and marker-less arenas.
+"""Extra checks for KD_4373_task1a.py: tilted, rotated, crowded and marker-less arenas.
 
 Usage:
     python tools/selftest.py
@@ -16,7 +16,7 @@ import make_test_image as gen
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_DIR = os.path.join(os.path.dirname(HERE), 'pico_ws', 'src', 'swift_pico', 'scripts')
-SCRIPT_PATH = os.path.join(SCRIPT_DIR, 'KD_1234_task1a.py')
+SCRIPT_PATH = os.path.join(SCRIPT_DIR, 'KD_4373_task1a.py')
 
 
 def load_detector():
