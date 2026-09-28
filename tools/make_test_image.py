@@ -22,7 +22,7 @@ ARENA_BORDER = (60, 60, 60)         # dark boundary line drawn inside the arena 
 ARENA_BORDER_INSET = 8              # keeps the line clear of the corner markers
 ARENA_BORDER_THICKNESS = 4
 BACKGROUND = (255, 255, 255)        # white background = quiet zone for the markers
-MARKER_IDS = (80, 85, 90, 95)       # TL, TR, BR, BL — the four required corner markers
+MARKER_IDS = (80, 85, 90, 95)       # default TL, TR, BR, BL corner marker IDs
 CRITICAL_CELLS = ("C4",)            # red blobs
 STABLE_CELLS = ("G8",)              # yellow blobs
 BLOB_RADIUS = 15                    # radius in source pixels
@@ -114,17 +114,38 @@ def erase_marker_id(image, marker_id, pad=8):
     return erase_marker(image, MARKER_IDS.index(marker_id), pad)
 
 
+def parse_marker_ids(text):
+    try:
+        marker_ids = [int(part.strip()) for part in text.split(',') if part.strip()]
+    except ValueError as error:
+        raise ValueError(f"bad marker ID list {text!r}: {error}")
+    if len(marker_ids) != 4:
+        raise ValueError(f"need exactly 4 marker IDs, got {marker_ids}")
+    if len(set(marker_ids)) != 4:
+        raise ValueError(f"marker IDs must be distinct, got {marker_ids}")
+    return tuple(marker_ids)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Create a synthetic Task 1A arena image')
     parser.add_argument('--out', default=os.path.join('images', 'image_1.jpg'),
                         help='Output image path (default: images/image_1.jpg)')
     parser.add_argument('--erase-id', type=int, default=None,
                         help='Erase one corner marker ID to test the missing-marker abort path')
+    parser.add_argument('--marker-ids',
+                        default=','.join(str(marker_id) for marker_id in MARKER_IDS),
+                        help='Exactly four comma-separated ArUco marker IDs in TL,TR,BR,BL order')
     args = parser.parse_args()
 
     out_dir = os.path.dirname(args.out)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
+
+    global MARKER_IDS
+    try:
+        MARKER_IDS = parse_marker_ids(args.marker_ids)
+    except ValueError as error:
+        raise SystemExit(f"Error: {error}")
 
     image = build_image()
     if args.erase_id is not None:

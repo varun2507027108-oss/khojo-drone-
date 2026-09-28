@@ -6,9 +6,6 @@ import cv2
 import numpy as np
 
 
-REQUIRED_MARKER_IDS = (80, 85, 90, 95)
-
-
 def detect_markers(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
@@ -26,29 +23,30 @@ def detect_markers(image):
     return corners, ids
 
 
-def select_corner_markers(corners, ids, required_ids=None):
-    required = set(REQUIRED_MARKER_IDS if required_ids is None else required_ids)
-
+def select_corner_markers(corners, ids):
     if ids is None:
-        print(f"Error: No ArUco markers detected (required: {sorted(required)})")
+        print("Error: No ArUco markers detected")
         return None, None
 
     ids_flat = [int(marker_id) for marker_id in np.asarray(ids).flatten()]
-    detected_set = set(ids_flat)
+    count = len(ids_flat)
 
-    missing = required - detected_set
-    if missing:
-        print(f"Error: Missing required marker IDs: {sorted(missing)}")
+    if count < 4:
+        print(f"Error: Exactly four ArUco markers are required, but detected {count}")
+        return None, None
+    if count > 4:
+        print(f"Error: Exactly four ArUco markers are required, but detected {count}")
         return None, None
 
-    selected_corners = []
-    selected_ids = []
-    for marker_corners, marker_id in zip(corners, ids_flat):
-        if marker_id in required:
-            selected_corners.append(marker_corners)
-            selected_ids.append(marker_id)
+    if len(set(ids_flat)) != 4:
+        print(f"Error: Four distinct ArUco marker IDs are required, got {ids_flat}")
+        return None, None
 
-    return selected_corners, np.array(selected_ids)
+    if corners is None or len(corners) != 4:
+        print("Error: Invalid marker detection data (corner count mismatch)")
+        return None, None
+
+    return list(corners), np.array(ids_flat, dtype=np.int32)
 
 
 def order_corner_points(pts):
@@ -165,19 +163,7 @@ def write_results(image_path, detected_ids, critical_labels, stable_labels):
 def main():
     parser = argparse.ArgumentParser(description='Detect survivors in arena image')
     parser.add_argument('--image', required=True, help='Path to input image')
-    parser.add_argument('--required-ids',
-                        default=','.join(str(marker_id) for marker_id in REQUIRED_MARKER_IDS),
-                        help='Comma-separated marker IDs marking the four arena corners')
     args = parser.parse_args()
-
-    try:
-        required_ids = {int(part) for part in args.required_ids.split(',') if part.strip()}
-    except ValueError:
-        print(f"Error: --required-ids must be comma-separated integers: {args.required_ids}")
-        sys.exit(1)
-    if not required_ids:
-        print("Error: --required-ids must contain at least one marker ID")
-        sys.exit(1)
 
     image = cv2.imread(args.image)
     if image is None:
@@ -185,11 +171,10 @@ def main():
         sys.exit(1)
 
     corners, ids = detect_markers(image)
-    selected_corners, selected_ids = select_corner_markers(corners, ids, required_ids)
+    selected_corners, selected_ids = select_corner_markers(corners, ids)
 
     if selected_corners is None:
-        print("Error: Need all four required ArUco markers: "
-              + ', '.join(str(marker_id) for marker_id in sorted(required_ids)))
+        print("Error: Need exactly four distinct ArUco markers to define the arena corners")
         sys.exit(1)
 
     detected_ids = sorted(int(mid) for mid in selected_ids)

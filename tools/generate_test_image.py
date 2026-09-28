@@ -25,7 +25,7 @@ GRID_LINES = 12           # 12 x 12 cells -> 11 x 11 labels, A..K and 1..11
 MAX_COL = 10              # 'K'
 MAX_ROW = 10              # '11'
 
-MARKER_IDS = (80, 85, 90, 95)   # TL, TR, BR, BL
+MARKER_IDS = (80, 85, 90, 95)   # default TL, TR, BR, BL
 MARKER_SIZE = 100
 MARKER_PAD = 20                 # gap between marker and canvas border
 MARGIN = MARKER_SIZE + MARKER_PAD
@@ -84,16 +84,16 @@ def draw_grid(arena, size=ARENA_SIZE, margin=MARGIN, cells=GRID_LINES,
     return arena
 
 
-def place_corner_markers(arena, dictionary, marker_size=MARKER_SIZE, margin=MARGIN,
-                         size=ARENA_SIZE):
-    """Paste 80/85/90/95 just outside the arena corners (inner corner on the corner)."""
-    positions = {
-        80: (margin - marker_size, margin - marker_size),   # TL, inner corner bottom-right
-        85: (margin + size, margin - marker_size),          # TR, inner corner bottom-left
-        90: (margin + size, margin + size),                 # BR, inner corner top-left
-        95: (margin - marker_size, margin + size),          # BL, inner corner top-right
-    }
-    for marker_id, (x, y) in positions.items():
+def place_corner_markers(arena, dictionary, marker_ids=MARKER_IDS, marker_size=MARKER_SIZE,
+                         margin=MARGIN, size=ARENA_SIZE):
+    """Paste four markers just outside arena corners (inner corner on the corner)."""
+    positions = [
+        (margin - marker_size, margin - marker_size),  # TL, inner corner bottom-right
+        (margin + size, margin - marker_size),         # TR, inner corner bottom-left
+        (margin + size, margin + size),                # BR, inner corner top-left
+        (margin - marker_size, margin + size),         # BL, inner corner top-right
+    ]
+    for marker_id, (x, y) in zip(marker_ids, positions):
         arena[y:y + marker_size, x:x + marker_size] = create_aruco_marker(
             dictionary, marker_id, marker_size)
     return arena
@@ -161,13 +161,19 @@ def apply_perspective_distortion(image, strength=0.15, seed=42):
 
 
 def generate_test_image(output_path, critical_labels, stable_labels,
+                        marker_ids=MARKER_IDS,
                         perspective=True, seed=42, obstacles=True):
     """Compose the arena, optionally tilt it, write it, and report the expected answer."""
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+    marker_ids = tuple(marker_ids)
+    if len(marker_ids) != 4:
+        raise ValueError(f"marker_ids must contain exactly 4 IDs, got {list(marker_ids)}")
+    if len(set(marker_ids)) != 4:
+        raise ValueError(f"marker_ids must be distinct, got {list(marker_ids)}")
 
     arena = create_arena_base()
     arena = draw_grid(arena)
-    arena = place_corner_markers(arena, dictionary)
+    arena = place_corner_markers(arena, dictionary, marker_ids=marker_ids)
     if obstacles:
         arena = place_obstacles(arena, seed=seed)
     arena = place_survivors(arena, critical_labels, stable_labels)
@@ -181,7 +187,7 @@ def generate_test_image(output_path, critical_labels, stable_labels,
         raise SystemExit(f"Error: Cannot write image: {output_path}")
 
     expected = {
-        'Detected marker IDs': list(MARKER_IDS),
+        'Detected marker IDs': list(marker_ids),
         'Critical Survivors': sorted(critical_labels),
         'Stable Survivors': sorted(stable_labels),
     }
@@ -200,6 +206,18 @@ def split_labels(text):
     return [part.strip().upper() for part in text.split(',') if part.strip()]
 
 
+def parse_marker_ids(text):
+    try:
+        marker_ids = [int(part.strip()) for part in text.split(',') if part.strip()]
+    except ValueError as error:
+        raise ValueError(f"bad marker ID list {text!r}: {error}")
+    if len(marker_ids) != 4:
+        raise ValueError(f"need exactly 4 marker IDs, got {marker_ids}")
+    if len(set(marker_ids)) != 4:
+        raise ValueError(f"marker IDs must be distinct, got {marker_ids}")
+    return marker_ids
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate a test arena image with real ArUco markers')
     parser.add_argument('--out', required=True, help='Output image path')
@@ -208,6 +226,9 @@ def main():
     parser.add_argument('--no-perspective', action='store_true', help='Generate flat (top-down) image')
     parser.add_argument('--no-obstacles', action='store_true', help='Leave out black squares and foliage')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for obstacle placement')
+    parser.add_argument('--marker-ids',
+                        default=','.join(str(marker_id) for marker_id in MARKER_IDS),
+                        help='Exactly four comma-separated ArUco marker IDs in TL,TR,BR,BL order')
     args = parser.parse_args()
 
     critical = split_labels(args.critical)
@@ -215,10 +236,12 @@ def main():
     try:
         for label in critical + stable:
             label_to_pixel(label)
+        marker_ids = parse_marker_ids(args.marker_ids)
     except ValueError as error:
         raise SystemExit(f"Error: {error}")
 
     generate_test_image(args.out, critical, stable,
+                        marker_ids=marker_ids,
                         perspective=not args.no_perspective,
                         seed=args.seed,
                         obstacles=not args.no_obstacles)
